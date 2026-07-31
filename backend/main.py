@@ -14,11 +14,17 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Compost Tracker API")
 
-# Allows your React dev server (localhost:5173) to call this API.
-# When you deploy for real later, replace "*" with your actual frontend URL.
+# Allows only your actual frontend(s) to call this API — your deployed
+# Vercel app, plus localhost so local development still works.
+# ALLOWED_ORIGINS can be set on Railway to add more later without a code change.
+import os
+
+default_origins = "https://compost-tracker.vercel.app,http://localhost:5173"
+allowed_origins = os.getenv("ALLOWED_ORIGINS", default_origins).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
