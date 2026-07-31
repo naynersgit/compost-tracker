@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Menu, Leaf, Layers, ClipboardCheck } from 'lucide-react'
 import {
   getIntakeEvents,
   createIntakeEvent,
@@ -8,6 +9,54 @@ import {
   getLoggingSummary,
   getFlaggedEvents,
 } from './api'
+
+function PillGroup({ options, value, onChange }) {
+  return (
+    <div className="pill-group">
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          className={`pill ${value === opt.value ? 'selected' : ''}`}
+          onClick={() => onChange(opt.value)}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Field({ label, required, children }) {
+  return (
+    <div className="field">
+      <div className="field-label-row">
+        <label>{label}</label>
+        {required && <span className="required-tag">Required</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function SuggestInput({ id, value, onChange, options, placeholder }) {
+  return (
+    <>
+      <input
+        list={id}
+        type="text"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <datalist id={id}>
+        {options.map((opt) => (
+          <option key={opt} value={opt} />
+        ))}
+      </datalist>
+    </>
+  )
+}
 
 function IntakeTab() {
   const [events, setEvents] = useState([])
@@ -58,32 +107,30 @@ function IntakeTab() {
     }
   }
 
+  const canSubmit = form.date && form.material_type && form.volume_cy !== ''
+
+  const haulerOptions = [...new Set(events.map((ev) => ev.hauler).filter(Boolean))].sort()
+  const loggerOptions = [...new Set(events.map((ev) => ev.logged_by).filter(Boolean))].sort()
+
   return (
     <>
       <div className="card">
-        <h2>Log a delivery</h2>
+        <h2>Food &amp; Green Waste Diversion</h2>
+        <p className="card-subtitle">
+          Log the material delivered to your site today. Enter total volume in cubic yards.
+        </p>
         <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>Date</label>
-            <input
-              type="date"
-              required
-              value={form.date}
-              onChange={(e) => setForm({ ...form, date: e.target.value })}
-            />
-          </div>
-          <div className="field">
-            <label>Material type</label>
-            <select
+          <Field label="Material type" required>
+            <PillGroup
+              options={[
+                { value: 'food_scraps', label: 'Food scraps' },
+                { value: 'green_waste', label: 'Green waste' },
+              ]}
               value={form.material_type}
-              onChange={(e) => setForm({ ...form, material_type: e.target.value })}
-            >
-              <option value="food_scraps">Food scraps</option>
-              <option value="green_waste">Green waste</option>
-            </select>
-          </div>
-          <div className="field">
-            <label>Volume (cubic yards)</label>
+              onChange={(v) => setForm({ ...form, material_type: v })}
+            />
+          </Field>
+          <Field label="Volume (cubic yards)" required>
             <input
               type="number"
               step="0.1"
@@ -92,26 +139,36 @@ function IntakeTab() {
               value={form.volume_cy}
               onChange={(e) => setForm({ ...form, volume_cy: e.target.value })}
             />
-          </div>
-          <div className="field">
-            <label>Hauler</label>
-            <input
-              type="text"
+          </Field>
+          <Field label="Hauler">
+            <SuggestInput
+              id="hauler-options"
               value={form.hauler}
-              onChange={(e) => setForm({ ...form, hauler: e.target.value })}
+              onChange={(v) => setForm({ ...form, hauler: v })}
+              options={haulerOptions}
+              placeholder="Select or type a hauler"
             />
-          </div>
-          <div className="field">
-            <label>Logged by</label>
-            <input
-              type="text"
+          </Field>
+          <Field label="Logged by">
+            <SuggestInput
+              id="logger-options"
               value={form.logged_by}
-              onChange={(e) => setForm({ ...form, logged_by: e.target.value })}
+              onChange={(v) => setForm({ ...form, logged_by: v })}
+              options={loggerOptions}
+              placeholder="Select or type your name"
             />
-          </div>
+          </Field>
+          <Field label="Date" required>
+            <input
+              type="date"
+              required
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+            />
+          </Field>
           {error && <div className="error-text">{error}</div>}
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Log delivery'}
+          <button type="submit" disabled={saving || !canSubmit}>
+            {saving ? 'Saving…' : 'Submit'}
           </button>
         </form>
       </div>
@@ -185,13 +242,15 @@ function BatchesTab() {
     }
   }
 
+  const canSubmit = form.batch_label && form.start_date
+
   return (
     <>
       <div className="card">
         <h2>Start a batch</h2>
+        <p className="card-subtitle">Give the new batch a label and today's date.</p>
         <form onSubmit={handleSubmit}>
-          <div className="field">
-            <label>Batch label</label>
+          <Field label="Batch label" required>
             <input
               type="text"
               placeholder="e.g. 2026-07-B01"
@@ -199,27 +258,25 @@ function BatchesTab() {
               value={form.batch_label}
               onChange={(e) => setForm({ ...form, batch_label: e.target.value })}
             />
-          </div>
-          <div className="field">
-            <label>Start date</label>
+          </Field>
+          <Field label="Start date" required>
             <input
               type="date"
               required
               value={form.start_date}
               onChange={(e) => setForm({ ...form, start_date: e.target.value })}
             />
-          </div>
-          <div className="field">
-            <label>Notes</label>
+          </Field>
+          <Field label="Notes">
             <input
               type="text"
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
-          </div>
+          </Field>
           {error && <div className="error-text">{error}</div>}
-          <button type="submit" disabled={saving}>
-            {saving ? 'Saving…' : 'Start batch'}
+          <button type="submit" disabled={saving || !canSubmit}>
+            {saving ? 'Saving…' : 'Submit'}
           </button>
         </form>
       </div>
@@ -303,7 +360,7 @@ function ReviewTab() {
                 <tr key={row.logged_by}>
                   <td>{row.logged_by}</td>
                   <td>{row.last_date}</td>
-                  <td style={row.days_since > 3 ? { color: '#a3372f', fontWeight: 600 } : undefined}>
+                  <td style={row.days_since > 3 ? { color: 'var(--danger)', fontWeight: 700 } : undefined}>
                     {row.days_since}
                   </td>
                 </tr>
@@ -354,39 +411,43 @@ function ReviewTab() {
   )
 }
 
+const TABS = [
+  { key: 'intake', label: 'Diversion', title: 'Food & Greens Diversion', icon: Leaf, Component: IntakeTab },
+  { key: 'batches', label: 'Batches', title: 'Batches', icon: Layers, Component: BatchesTab },
+  { key: 'review', label: 'Review', title: 'Review', icon: ClipboardCheck, Component: ReviewTab },
+]
+
 export default function App() {
   const [tab, setTab] = useState('intake')
+  const current = TABS.find((t) => t.key === tab)
+  const Active = current.Component
 
   return (
     <div className="app">
       <div className="app-header">
-        <h1>Compost Tracker</h1>
+        <div className="menu-icon" aria-hidden="true">
+          <Menu size={22} color="#fff" />
+        </div>
+        <h1>{current.title}</h1>
+        <div style={{ width: 32 }} />
       </div>
 
-      <div className="tabs">
-        <button
-          className={`tab ${tab === 'intake' ? 'active' : ''}`}
-          onClick={() => setTab('intake')}
-        >
-          Intake
-        </button>
-        <button
-          className={`tab ${tab === 'batches' ? 'active' : ''}`}
-          onClick={() => setTab('batches')}
-        >
-          Batches
-        </button>
-        <button
-          className={`tab ${tab === 'review' ? 'active' : ''}`}
-          onClick={() => setTab('review')}
-        >
-          Review
-        </button>
+      <div className="page-content">
+        <Active />
       </div>
 
-      {tab === 'intake' && <IntakeTab />}
-      {tab === 'batches' && <BatchesTab />}
-      {tab === 'review' && <ReviewTab />}
+      <nav className="bottom-nav">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            className={`nav-item ${tab === key ? 'active' : ''}`}
+            onClick={() => setTab(key)}
+          >
+            <Icon size={22} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }
