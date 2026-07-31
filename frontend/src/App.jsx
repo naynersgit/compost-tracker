@@ -5,6 +5,8 @@ import {
   getIntakeSummary,
   getBatches,
   createBatch,
+  getLoggingSummary,
+  getFlaggedEvents,
 } from './api'
 
 function IntakeTab() {
@@ -253,6 +255,105 @@ function BatchesTab() {
   )
 }
 
+function ReviewTab() {
+  const [summary, setSummary] = useState([])
+  const [flagged, setFlagged] = useState([])
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  async function refresh() {
+    setLoading(true)
+    try {
+      const [summaryData, flaggedData] = await Promise.all([
+        getLoggingSummary(),
+        getFlaggedEvents(),
+      ])
+      setSummary(summaryData)
+      setFlagged(flaggedData)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  return (
+    <>
+      <div className="card">
+        <h2>Who's logged recently</h2>
+        {loading ? (
+          <div className="empty-state">Loading…</div>
+        ) : summary.length === 0 ? (
+          <div className="empty-state">No entries with a name attached yet.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Logged by</th>
+                <th>Last entry</th>
+                <th>Days since</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.map((row) => (
+                <tr key={row.logged_by}>
+                  <td>{row.logged_by}</td>
+                  <td>{row.last_date}</td>
+                  <td style={row.days_since > 3 ? { color: '#a3372f', fontWeight: 600 } : undefined}>
+                    {row.days_since}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div className="empty-state" style={{ marginTop: 8 }}>
+          Entries in red haven't logged in over 3 days — adjust this threshold anytime.
+        </div>
+      </div>
+
+      <div className="card">
+        <h2>Entries that need a second look</h2>
+        {loading ? (
+          <div className="empty-state">Loading…</div>
+        ) : flagged.length === 0 ? (
+          <div className="empty-state">Nothing flagged — all recent entries look complete.</div>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Material</th>
+                <th>Volume</th>
+                <th>Hauler</th>
+                <th>Logged by</th>
+                <th>Issue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flagged.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.date}</td>
+                  <td>{row.material_type === 'food_scraps' ? 'Food scraps' : 'Green waste'}</td>
+                  <td>{row.volume_cy}</td>
+                  <td>{row.hauler || '—'}</td>
+                  <td>{row.logged_by || '—'}</td>
+                  <td className="error-text">{row.reasons.join(', ')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {error && <div className="error-text">{error}</div>}
+    </>
+  )
+}
+
 export default function App() {
   const [tab, setTab] = useState('intake')
 
@@ -275,9 +376,17 @@ export default function App() {
         >
           Batches
         </button>
+        <button
+          className={`tab ${tab === 'review' ? 'active' : ''}`}
+          onClick={() => setTab('review')}
+        >
+          Review
+        </button>
       </div>
 
-      {tab === 'intake' ? <IntakeTab /> : <BatchesTab />}
+      {tab === 'intake' && <IntakeTab />}
+      {tab === 'batches' && <BatchesTab />}
+      {tab === 'review' && <ReviewTab />}
     </div>
   )
 }
