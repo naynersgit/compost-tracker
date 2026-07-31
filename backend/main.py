@@ -18,6 +18,7 @@ app = FastAPI(title="Compost Tracker API")
 # Vercel app, plus localhost so local development still works.
 # ALLOWED_ORIGINS can be set on Railway to add more later without a code change.
 import os
+from datetime import date
 
 default_origins = "https://compost-tracker.vercel.app,http://localhost:5173"
 allowed_origins = os.getenv("ALLOWED_ORIGINS", default_origins).split(",")
@@ -49,6 +50,54 @@ def diversion_summary(db: Session = Depends(get_db)):
     """Quick running total — the seed of your diversion report."""
     total = db.query(func.sum(models.IntakeEvent.volume_cy)).scalar() or 0
     return {"total_volume_cy": total}
+
+
+@app.get("/intake-events/logging-summary")
+def logging_summary(db: Session = Depends(get_db)):
+    """Last log date per person — lets a reviewer spot who's gone quiet, without SQL."""
+    rows = (
+        db.query(models.IntakeEvent.logged_by, func.max(models.IntakeEvent.date).label("last_date"))
+        .filter(models.IntakeEvent.logged_by.isnot(None), models.IntakeEvent.logged_by != "")
+        .group_by(models.IntakeEvent.logged_by)
+        .all()
+    )
+    today = date.today()
+    summary = [
+        {
+            "logged_by": logged_by,
+            "last_date": last_date,
+            "days_since": (today - last_date).days,
+        }
+        for logged_by, last_date in rows
+    ]
+    return sorted(summary, key=lambda r: r["days_since"], reverse=True)
+
+
+@app.get("/intake-events/flagged")
+def flagged_intake_events(db: Session = Depends(get_db)):
+    """Entries missing key fields or with suspicious volumes — likely data entry mistakes."""
+    flagged = []
+    for e in db.query(models.IntakeEvent).order_by(models.IntakeEvent.date.desc()).all():
+        reasons = []
+        if not e.logged_by:
+            reasons.append("Missing logged by")
+        if not e.hauler:
+            reasons.append("Missing hauler")
+        if e.volume_cy <= 0:
+            reasons.append("Volume is zero or negative")
+        if e.volume_cy > 50:
+            reasons.append("Unusually high volume")
+        if reasons:
+            flagged.append({
+                "id": e.id,
+                "date": e.date,
+                "material_type": e.material_type,
+                "volume_cy": e.volume_cy,
+                "hauler": e.hauler,
+                "logged_by": e.logged_by,
+                "reasons": reasons,
+            })
+    return flagged
 
 
 @app.post("/batches/", response_model=schemas.BatchOut)
