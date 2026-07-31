@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+compost.db
+.env
+
+# Node
+node_modules/
+dist/
+
+# Editor
+.vscode/
+.DS_Store
